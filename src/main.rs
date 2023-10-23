@@ -149,7 +149,6 @@ fn print_intro_line(line: &str) {
         std::io::stdout().flush().unwrap();
         thread::sleep(time::Duration::from_millis(40));
     }
-    println!(); // Move to the next line after printing the current line
 }
 
 fn send_message(socket: &UdpSocket, username: &str, send_msg: &str) -> io::Result<()> {
