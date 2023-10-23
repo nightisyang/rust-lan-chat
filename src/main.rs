@@ -13,6 +13,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::{error::Error, io::Write};
 use std::{thread, time};
+use rand::Rng;
 
 fn main() -> io::Result<()> {
     // spawn a thread to listen for messages
@@ -31,6 +32,9 @@ fn main() -> io::Result<()> {
         // Add other arguments here in the future
         .get_matches();
 
+    let username = get_username()?;
+    let username_clone = username.clone(); 
+
     let bind_addr = matches
         .value_of("bind")
         .unwrap_or("0.0.0.0:8888")
@@ -41,14 +45,15 @@ fn main() -> io::Result<()> {
 
     let intro_thread = thread::spawn(move || {
         let intro_lines = vec![
-            "Wake up, Neo...",
-            "The Matrix has you...",
-            "Follow the white rabbit.",
-            "Knock, knock, Neo.",
+            format!("Wake up, {}...", username.to_string()),
+            "The Matrix has you...".to_string(),
+            "Follow the white rabbit.".to_string(),
+            format!("Knock, knock, {}.", username.to_string()),
         ];
 
         for line in intro_lines {
-            print_intro_line(line);
+            let _ = clear_screen();
+            print_intro_line(&line);
             thread::sleep(time::Duration::from_secs(1));
         }
 
@@ -97,7 +102,7 @@ fn main() -> io::Result<()> {
 
             let user_message = format!("you: {}", input);
 
-            send_message(&send_socket, input).expect("Failed to send message");
+            send_message(&send_socket, &username_clone, input).expect("Failed to send message");
 
             // send the user's messages to the main thread to update chat history
             tx_tx
@@ -109,7 +114,7 @@ fn main() -> io::Result<()> {
     // Optionally, wait for the intro to finish before proceeding
     intro_thread.join().expect("The intro thread panicked");
 
-    let _ =clear_screen();
+    let _ = clear_screen();
     print_prompt();
 
     // in the main thread, continuously read input and send messages
@@ -144,11 +149,12 @@ fn print_intro_line(line: &str) {
     println!(); // Move to the next line after printing the current line
 }
 
-fn send_message(socket: &UdpSocket, send_msg: &str) -> io::Result<()> {
+fn send_message(socket: &UdpSocket, username: &str, send_msg: &str) -> io::Result<()> {
     let broadcast_address: SocketAddr = "255.255.255.255:8888".parse().unwrap();
+    let concat_msg = format!("{}: {}", username, send_msg);
 
     socket.set_broadcast(true)?;
-    socket.send_to(send_msg.as_bytes(), broadcast_address)?;
+    socket.send_to(concat_msg.as_bytes(), broadcast_address)?;
 
     Ok(())
 }
@@ -193,4 +199,30 @@ fn clear_screen() -> Result<(), Box<dyn Error>> {
     execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
     stdout.flush()?;
     Ok(())
+}
+
+fn get_username() -> io::Result<String> {
+    let _ = clear_screen();
+    print!("Enter a username: ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let username = input.trim();
+
+    if username.is_empty() {
+        return Ok(generate_random_username())
+    } else {
+        return Ok(username.to_string())
+    }
+}
+
+fn generate_random_username() -> String {
+    let rand_string: String = rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(8)
+        .map(char::from)
+        .collect();
+
+    return rand_string
 }
