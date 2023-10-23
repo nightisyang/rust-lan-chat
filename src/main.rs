@@ -17,7 +17,6 @@ use rand::Rng;
 use rayon::ThreadPoolBuilder;
 
 fn main() -> io::Result<()> {
-    // spawn a thread to listen for messages
     let matches = App::new("Lan Chat App")
         .version("1.0")
         .author("You Name <your_email@example.com>")
@@ -26,8 +25,8 @@ fn main() -> io::Result<()> {
             Arg::with_name("bind")
                 .short("b")
                 .long("bind")
-                .value_name("ADDRESS")
-                .help("Sets an address to bind to")
+                .value_name("PORT ADDRESS")
+                .help("Sets a port to bind to")
                 .takes_value(true),
         )
         // Add other arguments here in the future
@@ -36,10 +35,12 @@ fn main() -> io::Result<()> {
     let username = get_username()?;
     let username_clone = username.clone(); 
 
-    let bind_addr = matches
+    let bind_port = matches
         .value_of("bind")
-        .unwrap_or("0.0.0.0:8888")
+        .unwrap_or("8888")
         .to_string();
+
+    let bind_addr = format!("0.0.0.0:{}", bind_port);
 
     let intro_done = Arc::new(Mutex::new(false));
     let intro_done_clone = Arc::clone(&intro_done);
