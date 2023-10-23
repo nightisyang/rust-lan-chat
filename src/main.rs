@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::{error::Error, io::Write};
 use std::{thread, time};
 use rand::Rng;
+use rayon::ThreadPoolBuilder;
 
 fn main() -> io::Result<()> {
     // spawn a thread to listen for messages
@@ -63,20 +64,21 @@ fn main() -> io::Result<()> {
     let bind_addr_clone = bind_addr.clone();
     let send_socket = UdpSocket::bind(&bind_addr_clone)?;
     let socket_clone = send_socket.try_clone()?;
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
 
     let chat_history = Arc::new(Mutex::new(Vec::new()));
-    let chat_history_recv_clone = Arc::clone(&chat_history);
-    let chat_history_send_clone = Arc::clone(&chat_history);
+    // let chat_history_recv_clone = Arc::clone(&chat_history);
+    // let chat_history_send_clone = Arc::clone(&chat_history);
 
     // Receiver thread channel
     let (rx_tx, rx_rx) = mpsc::channel();
 
     // Sender thread channel
-    let (tx_tx, tx_rx) = mpsc::channel();
+    // let (tx_tx, tx_rx) = mpsc::channel();
 
     // Receiver thread
     thread::spawn(move || {
-        let result = listen_for_message(&socket_clone, rx_tx);
+        let result = listen_for_message(&socket_clone, rx_tx, pool);
         if let Err(e) = result {
             eprintln!("Error in listener thread: {}", e);
         }
@@ -100,14 +102,14 @@ fn main() -> io::Result<()> {
                 std::process::exit(0);
             }
 
-            let user_message = format!("you: {}", input);
+            // let user_message = format!("you: {}", input);
 
             send_message(&send_socket, &username_clone, input).expect("Failed to send message");
 
             // send the user's messages to the main thread to update chat history
-            tx_tx
-                .send(user_message)
-                .expect("Failed to send user message to main thread");
+            // tx_tx
+            //     .send(user_message)
+            //     .expect("Failed to send user message to main thread");
         }
     });
 
@@ -121,18 +123,18 @@ fn main() -> io::Result<()> {
     loop {
         // check for messages from the receiver thread
         if let Ok(message) = rx_rx.try_recv() {
-            chat_history_recv_clone.lock().unwrap().push(message);
+            chat_history.lock().unwrap().push(message);
             let _ = clear_screen();
-            print_chat(&chat_history_recv_clone);
+            print_chat(&chat_history);
             print_prompt();
         }
 
-        if let Ok(message) = tx_rx.try_recv() {
+        // if let Ok(message) = tx_rx.try_recv() {
             // chat_history_send_clone.lock().unwrap().push(message);
             // clear_screen();
             // print_chat(&chat_history_send_clone);
             // print_prompt();
-        }
+        // }
 
         // sleep for a short duration to avoid busy-waiting
         thread::sleep(std::time::Duration::from_millis(100));
@@ -144,7 +146,7 @@ fn print_intro_line(line: &str) {
     for ch in chars {
         print!("{}", ch);
         std::io::stdout().flush().unwrap();
-        thread::sleep(time::Duration::from_millis(50));
+        thread::sleep(time::Duration::from_millis(40));
     }
     println!(); // Move to the next line after printing the current line
 }
@@ -159,14 +161,18 @@ fn send_message(socket: &UdpSocket, username: &str, send_msg: &str) -> io::Resul
     Ok(())
 }
 
-fn listen_for_message(socket: &UdpSocket, tx: mpsc::Sender<String>) -> io::Result<()> {
+fn listen_for_message(socket: &UdpSocket, tx: mpsc::Sender<String>, pool: rayon::ThreadPool) -> io::Result<()> {
     let mut buffer = [0u8; 1024];
     loop {
         let (amt, src) = socket.recv_from(&mut buffer)?;
         let message = format!("{}: {}", src, String::from_utf8_lossy(&buffer[..amt]));
-        log_messages(&message)?;
+
+        pool.install(|| {
+            
+        // log_messages(&message)?;
         tx.send(message)
             .expect("Failed to send message to main thread");
+        })
     }
 }
 
