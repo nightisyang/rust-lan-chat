@@ -2,11 +2,16 @@ use chrono::Local;
 use clap::{App, Arg};
 use std::fs::OpenOptions;
 use std::io;
-use std::io::prelude::*;
-use std::io::Write;
+// use std::io::prelude::*;
+use crossterm::{
+    cursor::MoveTo,
+    execute,
+    terminal::{Clear, ClearType},
+};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::{error::Error, io::Write};
 use std::{thread, time};
 
 fn main() -> io::Result<()> {
@@ -104,7 +109,7 @@ fn main() -> io::Result<()> {
     // Optionally, wait for the intro to finish before proceeding
     intro_thread.join().expect("The intro thread panicked");
 
-    clear_screen();
+    let _ =clear_screen();
     print_prompt();
 
     // in the main thread, continuously read input and send messages
@@ -112,7 +117,7 @@ fn main() -> io::Result<()> {
         // check for messages from the receiver thread
         if let Ok(message) = rx_rx.try_recv() {
             chat_history_recv_clone.lock().unwrap().push(message);
-            clear_screen();
+            let _ = clear_screen();
             print_chat(&chat_history_recv_clone);
             print_prompt();
         }
@@ -127,8 +132,6 @@ fn main() -> io::Result<()> {
         // sleep for a short duration to avoid busy-waiting
         thread::sleep(std::time::Duration::from_millis(100));
     }
-
-
 }
 
 fn print_intro_line(line: &str) {
@@ -138,9 +141,8 @@ fn print_intro_line(line: &str) {
         std::io::stdout().flush().unwrap();
         thread::sleep(time::Duration::from_millis(50));
     }
-    println!();  // Move to the next line after printing the current line
+    println!(); // Move to the next line after printing the current line
 }
-
 
 fn send_message(socket: &UdpSocket, send_msg: &str) -> io::Result<()> {
     let broadcast_address: SocketAddr = "255.255.255.255:8888".parse().unwrap();
@@ -186,13 +188,9 @@ fn print_prompt() {
     io::stdout().flush().unwrap();
 }
 
-fn clear_screen() {
-    #[cfg(unix)]
-    {
-        std::process::Command::new("clear").status().unwrap();
-    }
-    #[cfg(windows)]
-    {
-        std::process::Command::new("cls").status().unwrap();
-    }
+fn clear_screen() -> Result<(), Box<dyn Error>> {
+    let mut stdout = io::stdout();
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+    stdout.flush()?;
+    Ok(())
 }
